@@ -304,4 +304,416 @@ Examples:
 
 ---
 
+# Apache Airflow – Detailed Concepts & Scenarios
+
+This README provides **detailed explanations, reasons for usage, and practical examples** for core Apache Airflow operators, DAG concepts, and real-world scenarios. This document is intended for **learning + interview preparation**.
+
+---
+
+## 1. PythonOperator
+
+### What it is
+
+The `PythonOperator` is used to execute a **Python callable function** as a task in an Airflow DAG.
+
+### Why we use it
+
+* To run business logic written in Python
+* To transform data, call APIs, validate data
+* Most flexible operator in Airflow
+
+### How it works
+
+Airflow imports your Python function and executes it during task runtime.
+
+### Example
+
+```python
+from airflow import DAG
+from airflow.operators.python import PythonOperator
+from datetime import datetime
+
+
+def print_message():
+    print("Hello from PythonOperator")
+
+with DAG(
+    dag_id="python_operator_example",
+    start_date=datetime(2024, 1, 1),
+    schedule_interval=None
+) as dag:
+
+    task = PythonOperator(
+        task_id="print_task",
+        python_callable=print_message
+    )
+```
+
+---
+
+## 2. Sensor
+
+### What it is
+
+A Sensor **waits for a condition to be met** before allowing downstream tasks to run.
+
+### Why we use it
+
+* Wait for file arrival
+* Wait for database record
+* Wait for external system completion
+
+### How it works
+
+Sensors keep checking ("poking") at a defined interval until the condition is satisfied.
+
+### Example – FileSensor
+
+```python
+from airflow.sensors.filesystem import FileSensor
+
+file_sensor = FileSensor(
+    task_id='wait_for_file',
+    filepath='/data/input/data.csv',
+    poke_interval=30,
+    timeout=600
+)
+```
+
+---
+
+## 3. SubDagOperator (⚠ Deprecated – Conceptual Knowledge)
+
+### What it is
+
+Allows a DAG to be embedded inside another DAG.
+
+### Why it was used
+
+* Logical grouping of tasks
+* Reusability
+
+### Why NOT recommended now
+
+* Scheduler performance issues
+* Complex dependency management
+
+### Modern Alternative
+
+* TaskGroups
+
+### Example (Conceptual)
+
+```python
+SubDagOperator(
+    task_id='subdag_task',
+    subdag=subdag_function()
+)
+```
+
+---
+
+## 4. TriggerDagRunOperator
+
+### What it is
+
+Used to **trigger another DAG** from the current DAG.
+
+### Why we use it
+
+* DAG-to-DAG orchestration
+* Modular pipelines
+
+### Example
+
+```python
+from airflow.operators.trigger_dagrun import TriggerDagRunOperator
+
+trigger = TriggerDagRunOperator(
+    task_id='trigger_target_dag',
+    trigger_dag_id='target_dag'
+)
+```
+
+---
+
+## 5. BashOperator
+
+### What it is
+
+Executes **shell commands** inside a task.
+
+### Why we use it
+
+* Run scripts
+* Execute CLI commands
+* Lightweight tasks
+
+### Example
+
+```python
+from airflow.operators.bash import BashOperator
+
+bash_task = BashOperator(
+    task_id='run_bash',
+    bash_command='echo "Hello Airflow"'
+)
+```
+
+---
+
+## 6. Workflow Management
+
+### What it is
+
+Designing, scheduling, monitoring, and retrying tasks in a controlled way.
+
+### Why it matters
+
+* Ensures reliable data pipelines
+* Handles failures and retries automatically
+
+### Example
+
+A DAG with retries, dependencies, and scheduling is workflow management.
+
+---
+
+## 7. Default Arguments
+
+### What it is
+
+Common parameters shared across tasks.
+
+### Why we use it
+
+* Avoid repetition
+* Centralized control
+
+### Example
+
+```python
+default_args = {
+    'owner': 'airflow',
+    'retries': 2,
+    'retry_delay': timedelta(minutes=5)
+}
+```
+
+---
+
+## 8. Schedule Interval
+
+### What it is
+
+Defines **when and how often** a DAG runs.
+
+### Examples
+
+```python
+schedule_interval='@daily'
+schedule_interval='0 2 * * *'
+schedule_interval=None  # Manual only
+```
+
+---
+
+## 9. Catchup
+
+### What it is
+
+Whether Airflow should run **past missed DAG runs**.
+
+### Why important
+
+Avoid unexpected backfills.
+
+### Example
+
+```python
+catchup=False
+```
+
+---
+
+## 10. Task Dependencies
+
+### What it is
+
+Defines execution order of tasks.
+
+### Example
+
+```python
+task1 >> task2
+```
+
+---
+
+## 11. set_upstream() / set_downstream()
+
+### What it is
+
+Programmatic way to set dependencies.
+
+### Example
+
+```python
+task2.set_upstream(task1)
+task1.set_downstream(task2)
+```
+
+---
+
+# 🔹 REAL-WORLD SCENARIOS
+
+## 1. File-based DAG trigger (wait for file arrival)
+
+### Use case
+
+Run pipeline only when a file arrives.
+
+### Example
+
+```python
+FileSensor(...)
+```
+
+---
+
+## 2. DAG-to-DAG dependency handling
+
+### Use case
+
+One pipeline depends on another.
+
+### Example
+
+```python
+TriggerDagRunOperator(...)
+```
+
+---
+
+## 3. Conditional task execution (branching)
+
+### Use case
+
+Run different tasks based on conditions.
+
+### Example
+
+```python
+from airflow.operators.branch import BranchPythonOperator
+```
+
+---
+
+## 4. Sequential vs Parallel task execution
+
+### Sequential
+
+```python
+t1 >> t2 >> t3
+```
+
+### Parallel
+
+```python
+t1 >> [t2, t3]
+```
+
+---
+
+## 5. Task retry on transient failure
+
+### Use case
+
+Temporary API/network failures.
+
+### Example
+
+```python
+retries=3
+retry_delay=timedelta(minutes=2)
+```
+
+---
+
+## 6. Partial DAG failure handling
+
+### Use case
+
+Some tasks fail, others succeed.
+
+### How Airflow handles
+
+Only failed tasks marked failed; downstream blocked.
+
+---
+
+## 7. Rerunning only failed tasks
+
+### How
+
+* UI → Clear failed tasks
+* Scheduler reruns only failed ones
+
+---
+
+## 8. Backfilling historical data
+
+### Use case
+
+Load past data.
+
+### Command
+
+```bash
+airflow dags backfill dag_id -s 2024-01-01 -e 2024-01-05
+```
+
+---
+
+## 9. Preventing duplicate data on reruns
+
+### Techniques
+
+* Idempotent logic
+* Merge instead of insert
+* Use execution_date
+
+---
+
+## 10. Manual trigger vs scheduled run mismatch
+
+### Problem
+
+Manual runs don’t match scheduled dates.
+
+### Solution
+
+Use `{{ ds }}` instead of system date.
+
+---
+
+## 11. Handling long-running sensors
+
+### Problem
+
+Sensors occupy worker slots.
+
+### Solution
+
+Use **reschedule mode**.
+
+### Example
+
+```python
+mode='reschedule'
+```
+
+---
+
+
 
